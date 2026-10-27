@@ -44,7 +44,8 @@ Figs. 1-4; `node build.js` (npm package `docx`) assembles the Word draft.
 ## Corporate credit case (Section VII)
 
 The CSMAR data are licensed and cannot be redistributed. The numbers for this case are
-taken from the author's earlier analysis of the same data; The CSMAR processing code is available from the author on request..
+taken from the author's earlier analysis of the same data, and the CSMAR processing code
+is available from the author on request.
 
 ## Software
 
