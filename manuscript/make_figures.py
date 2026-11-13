@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from matplotlib import font_manager
 from matplotlib.patches import FancyBboxPatch
 import numpy as np
-from results_data import YEARLY, LABEL_ROBUST, MON_YEARS, MON_CA
+from results_data import YEARLY, LABEL_ROBUST
 
 OUT = "figures"
 os.makedirs(OUT, exist_ok=True)
@@ -101,7 +101,7 @@ def fig2():
     from matplotlib.patches import Patch
     handles = [Line2D([], [], color=BLUE, marker="o", ms=3, lw=1.4, label="Approval gap $G_t$ (95% CI shaded)"),
                Line2D([], [], color=ORANGE, marker="s", ms=2.6, lw=1.2, ls="--",
-                      label="Residual among qualified $RG_t$"),
+                      label="Residual gap $RG_t$ (among $y=1$)"),
                Line2D([], [], color=INK, lw=0.8, ls=":", label="Pooled gap"),
                Patch(color=BAND, label="±5 pp tolerance")]
     fig.legend(handles=handles, loc="lower center", ncol=4, frameon=False, fontsize=7,
@@ -134,22 +134,28 @@ def fig3():
 
 # ---------------------------------------------------------------- Fig. 4 monitoring
 def fig4():
-    fig, ax = plt.subplots(figsize=(3.5, 2.35))
-    yrs = MON_YEARS
+    fig, ax = plt.subplots(figsize=(3.5, 2.9))
+    import json, os
+    f4 = json.load(open("collected_tables.json"))["fig4"]   # written by collect_results.py
+    yrs, mon = f4["years"], f4
     ax.axhline(0, color=MUTED, lw=0.5)
     ax.axhline(-2, color=MUTED, lw=0.6, ls=(0, (1, 2)))
     ax.text(2016, -1.93, "alert threshold", fontsize=6, color=MUTED, va="bottom")
-    ax.plot(yrs, 100 * np.array(MON_CA["true"]), color=INK, lw=2, marker="o", ms=4,
+    ax.plot(yrs, 100 * np.array(mon["true"]), color=INK, lw=2, marker="o", ms=4,
             label="Realized $RG_t$ (after labels)", zorder=5)
     spec = [("E0", "E0 last observed", MUTED, ":", "v"),
             ("E1", "E1 soft labels", YELLOW, "--", "^"),
             ("E2", "E2 recalibrated", AQUA, "-.", "s"),
+            ("E3u", "E3u current rule, unweighted", MAGENTA, (0, (5, 1.5)), "x"),
             ("E3", "E3 covariate-weighted", BLUE, "-", "D")]
     for k, lab, c, ls, mk in spec:
-        ax.plot(yrs, 100 * np.array(MON_CA[k]), color=c, ls=ls, marker=mk, ms=3, lw=1.1, label=lab)
+        if k not in mon:
+            continue
+        ax.plot(yrs, 100 * np.array(mon[k]), color=c, ls=ls, marker=mk, ms=3, lw=1.1, label=lab)
     ax.set_xticks(yrs); ax.set_xticklabels([f"'{str(y)[2:]}" for y in yrs])
     ax.set_ylabel("Residual gap (pp)"); ax.set_xlabel("Test year")
-    ax.legend(loc="lower left", frameon=False, fontsize=6, handlelength=2.4)
+    ax.legend(loc="upper center", bbox_to_anchor=(0.5, -0.24), ncol=2, frameon=False, fontsize=6,
+              handlelength=2.4, columnspacing=1.0)
     fig.tight_layout()
     save(fig, "fig4_monitoring")
 

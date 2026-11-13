@@ -1,14 +1,30 @@
 """
-All numbers used in the manuscript, transcribed from the author's local outputs
-(summary.md / monitor_summary.md / synthetic_summary.md, 27 Oct 2026) and, for the
-corporate credit case, from Tables 5, 9, 11, 14 of the original Paper 1 (v7).
-Proportions are stored as fractions (0.05 = 5 pp). q = 0.75 throughout.
+Numbers of the main runs, read by make_tables.py and make_figures.py. They were copied from the
+output files of the commands listed in README.md (runs of 27 Oct 2026, seed 0, XGBoost unless a
+block says otherwise); proportions are stored as fractions (0.05 = 5 pp), q = 0.75 throughout.
+Rerunning a command reproduces the corresponding block (XGBoost to within about 0.3 pp across
+hardware, see README).
+
+Block          Paper item                   Source
+YEARLY         Figs. 2(a-e), 3, Table A1    census: results_<setting>/yearly.csv (run_temporal_audit.py)
+LABEL_ROBUST   Fig. 2(f)                    results_income_race_CA_d{1,2}_{nominal,real,quantile}/yearly.csv
+POOLED         Table IV                     results_<setting>/pooled.csv and carryover.csv
+ROBUST         Table V (first rows)         the four LABEL_ROBUST runs, pooled.csv
+SYNTH          Table VI                     synthetic_validation/ (synthetic_validation.py --reps 20)
+SENS           Table IX                     synthetic_validation/ and monitor_*/monitor_summary.md
+"csmar" keys   Table IV, Figs. 2(a), 3      outputs of the CSMAR pipeline (Table A8: timing_check.csv);
+                                            the data are licensed, so this pipeline is not in the
+                                            repository (available on request)
+
+The remaining table cells (Tables V-VIII, A3-A5 and Fig. 4) are not stored here: collect_results.py
+reads them directly from the outputs of run_census_suite.py and synthetic_ablations.py into
+collected_tables.json and collected_numbers.json.
 """
 
 ACS_YEARS = [2015, 2016, 2017, 2018, 2019, 2021, 2022, 2023]
 CSMAR_YEARS = list(range(2014, 2023))
 
-# ---------------------------------------------------------------- yearly, XGBoost
+# ---------------------------------------------------------------- yearly, XGBoost (Figs. 2-3, Table A1)
 YEARLY = {
     "csmar": dict(
         label="Corporate credit (CSMAR)", years=CSMAR_YEARS,
@@ -61,7 +77,7 @@ YEARLY = {
         pooled_beta=.162, pooled_G=-.0598),
 }
 
-# label-definition robustness, CA income x race, XGBoost yearly G
+# label-definition robustness, CA income x race, XGBoost yearly G (Fig. 2(f))
 LABEL_ROBUST = {
     "Nominal $50k": dict(years=ACS_YEARS,
                          G=[-.0251, -.0358, -.0367, -.0276, -.0504, -.1091, -.1078, -.1205]),
@@ -73,7 +89,7 @@ LABEL_ROBUST = {
                            G=[-.0383, -.0378, -.0257, -.0459, -.1119, -.1085, -.1203]),
 }
 
-# ---------------------------------------------------------------- pooled summary (Table II)
+# ---------------------------------------------------------------- pooled summary (Table IV)
 # (pooled gap, CI lo, CI hi, mean|G|, years outside +-5, n years, beta min, beta max, pooled beta,
 #  carry fails, carry n, carry max excess gap)
 POOLED = {
@@ -102,7 +118,7 @@ PATTERN = {"csmar": "Cancellation", "inc_race_ca": "Level break",
            "inc_race_tx": "High level + step", "emp_race_ca": "Drift + peak",
            "inc_sex_ca": "Convergence"}
 
-# ---------------------------------------------------------------- robustness (Table III)
+# ---------------------------------------------------------------- robustness (Table V, first rows)
 # label, delay, mean gap 2015-19 (2016-19 for d=2), mean gap 2021-23, pooled gap, beta max, pooled beta
 ROBUST = [
     ("Nominal $50k", 1, -.0351, -.1125, -.0627, .607, .223),
@@ -111,37 +127,7 @@ ROBUST = [
     ("Top 40% within year", 2, -.0369, -.1136, -.0683, .616, .305),
 ]
 
-# ---------------------------------------------------------------- monitoring (Tables IV-VI)
-MON_YEARS = [2016, 2017, 2018, 2019, 2021, 2022, 2023]
-MON_CA = dict(  # CA income x race, quantile, d = 1, logistic domain classifier, beta = 0
-    true=[-.0090, -.0061, -.0067, -.0154, -.0306, -.0314, -.0279],
-    E0=[-.0047, -.0077, -.0041, -.0067, -.0140, -.0325, -.0327],
-    E1=[-.0056, -.0055, -.0037, -.0060, -.0200, -.0215, -.0208],
-    E2=[-.0064, -.0066, -.0022, -.0086, -.0259, -.0310, -.0292],
-    E3=[-.0057, -.0088, -.0034, -.0120, -.0269, -.0326, -.0332])
-# setting, estimator: (MAE pp, max err pp, err 2021 pp, raised, precision, recall); true alerts
-MON_ERR = {
-    ("CA income × race, d = 1", 3): [
-        ("E0", .568, 1.658, 1.658, 2, 1.0, .667), ("E1", .626, 1.06, 1.06, 2, 1.0, .667),
-        ("E2", .296, .684, .468, 3, 1.0, 1.0), ("E3 (logistic)", .326, .53, .368, 3, 1.0, 1.0),
-        ("E3 (boosted)", .365, .561, .561, 3, 1.0, 1.0)],
-    ("CA income × race, d = 2", 3): [
-        ("E0", .827, 1.658, 1.658, 1, 1.0, .333), ("E1", .612, 1.06, 1.06, 1, 1.0, .333),
-        ("E2", .355, .933, .468, 3, 1.0, 1.0), ("E3 (logistic)", .446, .817, .368, 3, 1.0, 1.0)],
-    ("CA employment × race, d = 1", 0): [
-        ("E0", .074, .122, .045, 0, None, None), ("E1", .118, .163, .11, 0, None, None),
-        ("E2", .073, .142, .142, 0, None, None), ("E3 (logistic)", .09, .199, .132, 0, None, None),
-        ("E3 (boosted)", .10, .195, .104, 0, None, None)],
-}
-# policy: (years outside, of, largest |gap| pp, mean FRR %)
-POLICY = {
-    "CA income × race": {"No calibration": (3, 8, 12.0, 1.79), "Static": (3, 8, 12.0, 1.79),
-                         "Carry-over": (2, 8, 10.8, 1.80), "Per-period": (0, 8, 5.0, 1.80)},
-    "CA employment × race": {"No calibration": (5, 8, 7.9, .67), "Static": (5, 8, 7.9, .67),
-                             "Carry-over": (3, 8, 6.7, .67), "Per-period": (0, 8, 5.0, .67)},
-}
-
-# ---------------------------------------------------------------- synthetic (Table VII)
+# ---------------------------------------------------------------- synthetic (Table VI)
 # scenario: G first,last ; RG first,last ; RC first,last ; bias E0,E1,E2,E3,E3_oracle ; MAE E0..E3_oracle
 SYNTH = {
     "No drift": ((-12.25, -12.03), (-3.98, -3.79), (-8.27, -8.24),
@@ -152,4 +138,16 @@ SYNTH = {
                     (0, -.33, .02, -.05, -.05), (.33, .38, .30, .34, .34)),
     "Concept shift": ((-12.09, -11.87), (-2.56, -.71), (-9.52, -11.16),
                       (-.32, -1.99, -.08, -.30, -.30), (1.02, 2.00, .92, 1.01, 1.02)),
+}
+
+# ---------------------------------------------------------------- concept-shift sensitivity (Table IX)
+# setting: (history-calibrated: covered, n, mean width pp), (gamma 1.1 cov, width), (1.25 cov, width), max gamma_needed
+SENS = {
+    "Synthetic, no drift":        ((0.717, None, 3.01), (0.957, 4.72), (1.000, 11.22), None),
+    "Synthetic, covariate shift": ((0.692, None, 4.44), (0.864, 5.94), (0.993, 14.03), None),
+    "Synthetic, label shift":     ((0.725, None, 1.10), (0.400, 0.49), (0.793, 1.16), None),
+    "Synthetic, concept shift":   ((0.692, None, 3.14), (0.893, 4.15), (1.000, 9.90), None),
+    "CA income × race, d = 1":    ((5, 6, 1.22), (1.0, 1.89), (1.0, 4.53), 1.061),
+    "CA income × race, d = 2":    ((3, 4, 2.80), (0.833, 1.95), (1.0, 4.66), 1.138),
+    "CA employment × race, d = 1": ((5, 6, 0.48), (1.0, 0.52), (1.0, 1.25), 1.098),
 }

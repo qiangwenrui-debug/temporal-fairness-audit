@@ -103,6 +103,69 @@ def isotonic_by_group(sH, gH, yH, sT, gT):
     return out
 
 
+# ---------------------------------------------------------------- concept-shift sensitivity
+def e3_parts(aH_cur, gH, yH, w):
+    """Weight mass of qualified reference rows that the current rule approves (A) or rejects (N)."""
+    q1 = (yH == 1)
+    return {f"{k}{g}": float((w * (aH_cur if k == "A" else 1 - aH_cur))[q1 & (gH == g)].sum())
+            for k in "AN" for g in (0, 1)}
+
+
+def sensitivity_interval(p, gamma):
+    """Bounds on RG_T when P(y=1|x,g) may change between H and T by a factor in [1/gamma, gamma].
+    Worst case: approved qualified rows up- (down-)weighted by gamma, rejected ones the reverse,
+    which gives a_max = g^2 A / (g^2 A + N) and a_min = A / (A + g^2 N) per group."""
+    g2 = gamma ** 2
+    amax = {k: g2 * p[f"A{k}"] / (g2 * p[f"A{k}"] + p[f"N{k}"]) for k in (0, 1)}
+    amin = {k: p[f"A{k}"] / (p[f"A{k}"] + g2 * p[f"N{k}"]) for k in (0, 1)}
+    return amin[1] - amax[0], amax[1] - amin[0]
+
+
+def gamma_needed(p, truth, hi_cap=50.0):
+    """Smallest gamma >= 1 whose interval covers the realised residual (bisection)."""
+    lo, hi = sensitivity_interval(p, 1.0)
+    if lo <= truth <= hi:
+        return 1.0
+    if not (lambda iv: iv[0] <= truth <= iv[1])(sensitivity_interval(p, hi_cap)):
+        return hi_cap
+    a, b = 1.0, hi_cap
+    for _ in range(60):
+        m = 0.5 * (a + b)
+        l, h = sensitivity_interval(p, m)
+        a, b = (a, m) if l <= truth <= h else (m, b)
+    return b
+
+
+def add_intervals(res, delay, fixed=(1.1, 1.25, 1.5)):
+    """Adds gamma_needed per year, the history-calibrated gamma (max of gamma_needed over test
+    years whose labels have arrived, t <= T - delay) and the resulting interval and coverage."""
+    out = []
+    for _, d in res.groupby([c for c in ["model", "rule", "scenario", "rep"] if c in res.columns],
+                            sort=False):
+        d = d.sort_values(d.columns[[c in ("year", "t") for c in d.columns]][0]).copy()
+        tcol = "year" if "year" in d.columns else "t"
+        truth = "true_RG" if "true_RG" in d.columns else "RG"
+        parts = d[["A0", "A1", "N0", "N1"]].to_dict("records")
+        d["gamma_needed"] = [gamma_needed(p, t) for p, t in zip(parts, d[truth])]
+        cal = []
+        for T in d[tcol]:
+            past = d.loc[d[tcol] <= T - delay, "gamma_needed"]
+            cal.append(float(past.max()) if len(past) else np.nan)
+        d["gamma_cal"] = cal
+        lo, hi = zip(*[sensitivity_interval(p, g) if not np.isnan(g) else (np.nan, np.nan)
+                       for p, g in zip(parts, d["gamma_cal"])])
+        d["E3_lo"], d["E3_hi"] = lo, hi
+        cov = ((d["E3_lo"] <= d[truth]) & (d[truth] <= d["E3_hi"])).astype(float)
+        d["covered"] = cov.where(d["gamma_cal"].notna())
+        for gm in fixed:
+            l, h = zip(*[sensitivity_interval(p, gm) for p in parts])
+            d[f"cov_g{gm}"] = (np.array(l) <= d[truth]) & (d[truth] <= np.array(h))
+            d[f"width_g{gm}"] = 100 * (np.array(h) - np.array(l))
+        d["E1_E3_gap_pp"] = 100 * (d["E1"] - d["E3"]).abs()
+        out.append(d)
+    return pd.concat(out)
+
+
 def estimate_all(XH, sH, gH, yH, XT, sT, gT, q, beta, betaH, seed=0, clf="hgb", w_oracle=None):
     """All four estimates of RG_T, plus effective sample size of the E3 weights.
     w_oracle (synthetic only): true density ratio on H rows -> extra estimate E3_oracle."""
@@ -120,7 +183,7 @@ def estimate_all(XH, sH, gH, yH, XT, sT, gT, q, beta, betaH, seed=0, clf="hgb", 
     aH_cur = apply_tau(sH, gH, tauT).astype(float)
     e3 = residual(aH_cur, gH, w * (yH == 1))
     ess = w.sum() ** 2 / (w ** 2).sum() / len(w)
-    out = dict(E0=e0, E1=e1, E2=e2, E3=e3, ess_frac=ess)
+    out = dict(E0=e0, E1=e1, E2=e2, E3=e3, ess_frac=ess, **e3_parts(aH_cur, gH, yH, w))
     if w_oracle is not None:
         out["E3_oracle"] = residual(aH_cur, gH, w_oracle * (yH == 1))
     return out
@@ -218,6 +281,9 @@ def main():
 
     # ---- summaries ---------------------------------------------------------------
     res = df[df.kind == "residual"].copy()
+    res = add_intervals(res, a.label_delay)
+    df = pd.concat([res, df[df.kind == "policy"]], ignore_index=True)
+    df.to_csv(f"{out}/monitor_yearly.csv", index=False)
     err_rows, alert_rows = [], []
     for (m, rule), d in res.groupby(["model", "rule"]):
         truth = d.true_RG.values
@@ -269,6 +335,22 @@ def main():
         yr = res[res.rule == "beta0"][["model", "year", "holdout", "true_RG", "E0", "E1", "E2", "E3",
                                        "ess_frac"]]
         f.write("## Yearly residual estimates (beta = 0)\n\n" + yr.round(4).to_markdown(index=False) + "\n\n")
+        r0 = res[res.rule == "beta0"].sort_values("year")
+        sens = r0[["model", "year", "true_RG", "E3", "gamma_needed", "gamma_cal", "E3_lo", "E3_hi",
+                   "covered", "E1_E3_gap_pp", "ess_frac"]].copy()
+        for c in ["true_RG", "E3", "E3_lo", "E3_hi"]:
+            sens[c] = 100 * sens[c]
+        f.write("## Concept-shift sensitivity (beta = 0; RG and bounds in pp)\n\n"
+                "gamma_needed: smallest gamma whose interval covers the realised RG (known only after "
+                "labels arrive). gamma_cal: max gamma_needed over test years whose labels had arrived "
+                "by decision time (t <= T - d), i.e. calibrated on history only.\n\n"
+                + sens.round(3).to_markdown(index=False) + "\n\n")
+        fx = pd.DataFrame([{"gamma": gm, "coverage": r0[f"cov_g{gm}"].mean(),
+                            "mean_width_pp": r0[f"width_g{gm}"].mean()} for gm in (1.1, 1.25, 1.5)])
+        cal = r0.dropna(subset=["gamma_cal"])
+        f.write("## Coverage\n\n" + fx.round(3).to_markdown(index=False) + "\n\n"
+                f"History-calibrated gamma: coverage {cal.covered.astype(float).mean():.2f} over "
+                f"{len(cal)} years; mean width {100*(cal.E3_hi - cal.E3_lo).mean():.2f} pp\n\n")
         f.write(f"Runtime {time.time() - t0:.0f}s\n")
     print(open(f"{out}/monitor_summary.md").read())
 

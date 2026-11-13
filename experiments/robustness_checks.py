@@ -42,6 +42,33 @@ def rates(s, g, y, w, q, beta):
     return G, RG
 
 
+def group_rates(s, g, w, q, beta):
+    """(P1, P0) under the beta-interpolated rule, weighted by w."""
+    T = wquantile(s, w, 1 - q)
+    Tg = {k: wquantile(s[g == k], w[g == k], 1 - q) for k in (0, 1)}
+    tau = np.where(g == 1, (1 - beta) * T + beta * Tg[1], (1 - beta) * T + beta * Tg[0])
+    a = (s >= tau).astype(float)
+    return (a * w)[g == 1].sum() / w[g == 1].sum(), (a * w)[g == 0].sum() / w[g == 0].sum()
+
+
+def pooled_beta_star(sc, q, delta):
+    """Smallest beta whose pooled gap (same beta in every year, Prop. 1 incl. composition)
+    lies within delta; coarse pass with step 0.005, then refined to 0.001."""
+    def pooled(b):
+        num1 = num0 = W1 = W0 = 0.0
+        for s, g, w in sc:
+            P1, P0 = group_rates(s, g, w, q, b)
+            num1 += P1 * w[g == 1].sum(); W1 += w[g == 1].sum()
+            num0 += P0 * w[g == 0].sum(); W0 += w[g == 0].sum()
+        return num1 / W1 - num0 / W0
+    for b in BETAS[::5]:
+        if abs(pooled(b)) <= delta:
+            for bb in BETAS[(BETAS >= max(b - 0.005, 0)) & (BETAS <= b)]:
+                if abs(pooled(bb)) <= delta:
+                    return bb
+    return np.nan
+
+
 def beta_star(s, g, y, w, q, delta):
     for b in BETAS[::5]:                               # coarse pass, step 0.005
         if abs(rates(s, g, y, w, q, b)[0]) <= delta:
@@ -113,7 +140,7 @@ def main():
     specs = {"base": (False, base_feats), "weighted": (True, base_feats),
              "no_occp": (False, [f for f in base_feats if f != "OCCP"])}
 
-    rows = []
+    rows, scores = [], {}
     for spec, (weighted, feats) in specs.items():
         data = {y: prepare(raw[y], weighted) for y in years}
         for m in a.models:
@@ -131,30 +158,37 @@ def main():
                 s = model.predict_proba(coarsen(te[feats]))[:, 1]
                 g, y, w = te["__g"].values, te["__y"].values, te["__w"].values
                 G, RG = rates(s, g, y, w, a.q, 0.0)
+                P1, P0 = group_rates(s, g, w, a.q, 0.0)
                 b = beta_star(s, g, y, w, a.q, a.delta)
+                scores.setdefault((spec, m), []).append((s, g, w))
                 rows.append(dict(spec=spec, model=m, year=T, n=len(te), w1=w[g == 1].sum(),
-                                 w0=w[g == 0].sum(), G=G, RG=RG, beta_star=b))
+                                 w0=w[g == 0].sum(), G=G, RG=RG, P1=P1, P0=P0, beta_star=b))
                 print(f"  {spec:8s} {m} {T}: G={100*G:+.1f} RG={100*RG:+.1f} beta*={b:.3f}", flush=True)
     df = pd.DataFrame(rows)
     df.to_csv(f"{a.out}/robustness_yearly.csv", index=False)
 
-    # pooled gap with group weights over years (Prop. 1 weights) and summary
+    # pooled gap of Proposition 1 (weighted mean of yearly gaps plus composition term)
     summ = []
     for (spec, m), d in df.groupby(["spec", "model"], sort=False):
         w1, w0 = d.w1 / d.w1.sum(), d.w0 / d.w0.sum()
         pre, post = d[d.year <= 2019], d[d.year >= 2021]
         summ.append(dict(spec=spec, model=m,
                          mean_gap_2015_19_pp=100 * pre.G.mean(), mean_gap_2021_23_pp=100 * post.G.mean(),
-                         pooled_gap_pp=100 * ((w1 * d.G).sum()),
+                         pooled_gap_pp=100 * ((w1 * d.P1).sum() - (w0 * d.P0).sum()),
+                         weighted_mean_pp=100 * (w1 * d.G).sum(),
+                         composition_pp=100 * ((w1 - w0) * d.P0).sum(),
+                         beta_pool=pooled_beta_star(scores[(spec, m)], a.q, a.delta),
                          RG_2015_18_pp=f"{100*d[d.year <= 2018].RG.min():.1f} to {100*d[d.year <= 2018].RG.max():.1f}",
                          RG_2021_23_pp=f"{100*post.RG.min():.1f} to {100*post.RG.max():.1f}",
                          years_outside_5=int((d.G.abs() > a.delta).sum()), n_years=len(d),
                          beta_star_range=f"{d.beta_star.min():.2f}-{d.beta_star.max():.2f}"))
     S = pd.DataFrame(summ)
+    S.to_csv(f"{a.out}/robustness_summary.csv", index=False)
     with open(f"{a.out}/robustness_summary.md", "w") as f:
         f.write("# Robustness: CA income x race, quantile label, d = 1, q = 0.75\n\n")
-        f.write("pooled_gap_pp is the weighted average of yearly gaps (Prop. 1 without the "
-                "composition term).\n\n")
+        f.write("pooled_gap_pp = P1 - P0 on the pooled test years (Prop. 1: weighted mean of yearly "
+                "gaps plus composition term); beta_pool = smallest beta whose pooled gap is within "
+                "delta when applied in every year.\n\n")
         f.write(S.round(2).to_markdown(index=False) + "\n\n")
         piv = df.pivot_table(index="year", columns=["spec", "model"], values="G").mul(100).round(1)
         f.write("## Yearly approval gap (pp)\n\n" + piv.to_markdown() + "\n")

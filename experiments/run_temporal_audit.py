@@ -2,13 +2,12 @@
 """
 Temporal fairness audit with yearly out-of-time retraining on Folktables (ACS PUMS).
 
-Replicates the design of Paper 1 (Temporal Boundaries of Threshold Calibration) on a
-public benchmark:
+Audit protocol of the paper on a public benchmark:
   * for each test year T, train on all years <= T - label_delay (expanding window)
   * score year-T individuals, approve the top-q share (score = P(favourable label))
   * yearly approval gap G_t = P_1t - P_0t (protected minus reference group)
-  * Decomposition 1 (Eq. 2): pooled gap = sum_t w_1t G_t + sum_t (w_1t - w_0t) P_0t
-  * Decomposition 2 (Eq. 3): G_t = RG_t + RC_t, RG_t = approval gap among qualified (y=1),
+  * Proposition 1 (Eq. 3): pooled gap = sum_t w_1t G_t + sum_t (w_1t - w_0t) P_0t
+  * Proposition 2 (Eqs. 4-5): G_t = RG_t + RC_t, RG_t = approval gap among qualified (y=1),
     |RC_t| <= max(1 - pi_1t, 1 - pi_0t)
   * beta*_t = minimum calibration strength with |G_t(beta)| <= delta,
     tau_g(beta) = (1 - beta) T_t(q) + beta T_gt(q)
@@ -61,7 +60,6 @@ RELSHIPP_TO_RELP = {20: 0, 21: 1, 23: 1, 22: 13, 24: 13, 25: 2, 26: 3, 27: 4, 28
 # Data
 # ----------------------------------------------------------------------------------
 # CPI-U, U.S. city average, annual averages (BLS series CUUR0000SA0, 1982-84 = 100).
-# Verify against BLS before publication.
 CPI_U = {2014: 236.736, 2015: 237.017, 2016: 240.007, 2017: 245.120, 2018: 251.107,
          2019: 255.657, 2020: 258.811, 2021: 270.970, 2022: 292.655, 2023: 304.702}
 

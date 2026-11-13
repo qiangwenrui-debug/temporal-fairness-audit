@@ -25,7 +25,7 @@ import pandas as pd
 from sklearn.linear_model import LogisticRegression
 
 from run_temporal_audit import year_stats
-from delay_aware_monitor import estimate_all
+from delay_aware_monitor import estimate_all, add_intervals
 
 D, PERIODS, SHARE1 = 5, 9, 0.2
 BETA = np.array([1.0, 0.8, -0.6, 0.5, 0.3])
@@ -86,7 +86,8 @@ def run(scn, n, reps, q, seed0):
             est = estimate_all(XH, sH, gH, yH, XT, sT, gT, q, 0.0, 0.0, seed=r, clf="lr",
                                w_oracle=oracle_ratio(scn, XH, gH, t - 1, t))
             rows.append(dict(scenario=scn, rep=r, t=t, G=st["G"], RG=st["RG"], RC=st["RC"],
-                             **{e: est[e] for e in EST}))
+                             **{e: est[e] for e in EST},
+                             **{k: est[k] for k in ["A0", "A1", "N0", "N1", "ess_frac"]}))
     return pd.DataFrame(rows)
 
 
@@ -111,12 +112,30 @@ def main():
     bias = df.groupby("scenario")[[f"bias_{e}" for e in EST]].mean().round(2)
     first_last = traj[traj.t.isin([2, PERIODS - 1])]
 
+    # concept-shift sensitivity: gamma calibrated within each replicate on periods <= t - 1
+    iv = add_intervals(df, delay=1)
+    iv["width_pp"] = 100 * (iv.E3_hi - iv.E3_lo)
+    cal = iv.dropna(subset=["gamma_cal"])
+    sens = cal.groupby("scenario").agg(coverage=("covered", "mean"), mean_width_pp=("width_pp", "mean"),
+                                       mean_gamma_cal=("gamma_cal", "mean"))
+    for gm in (1.1, 1.25, 1.5):
+        sens[f"cov_g{gm}"] = iv.groupby("scenario")[f"cov_g{gm}"].mean()
+        sens[f"width_g{gm}"] = iv.groupby("scenario")[f"width_g{gm}"].mean()
+    diag = iv.groupby("scenario").agg(mean_E1_E3_gap_pp=("E1_E3_gap_pp", "mean"),
+                                      mean_ess=("ess_frac", "mean"))
+    iv.to_csv(f"{a.out}/synthetic_intervals.csv", index=False)
+
     with open(f"{a.out}/synthetic_summary.md", "w") as f:
         f.write(f"# Synthetic validation (reps = {a.reps}, n = {a.n} per period, q = {a.q})\n\n")
         f.write("## Which component moves (mean over reps, pp; first vs last test period)\n\n"
                 + first_last.to_markdown(index=False) + "\n\n")
         f.write("## Residual estimation: mean absolute error (pp)\n\n" + err.to_markdown() + "\n\n")
         f.write("## Residual estimation: mean signed bias (pp)\n\n" + bias.to_markdown() + "\n\n")
+        f.write("## Concept-shift sensitivity interval for E3\n\n"
+                "coverage / mean_width_pp: gamma calibrated on earlier periods of the same replicate "
+                "(first test period excluded). cov_gX / width_gX: fixed gamma.\n\n"
+                + sens.round(3).to_markdown() + "\n\n")
+        f.write("## Decision-time diagnostics\n\n" + diag.round(3).to_markdown() + "\n\n")
         f.write("## Full trajectories (pp)\n\n" + traj.to_markdown(index=False) + "\n")
     print(open(f"{a.out}/synthetic_summary.md").read())
 
