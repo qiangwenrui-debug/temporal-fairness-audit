@@ -115,7 +115,7 @@ POOLED = {
         "LGBM": (-.0595, -.0608, -.0583, .0597, 6, 8, 0, .258, .165, 3, 7, .0515)},
 }
 PATTERN = {"csmar": "Cancellation", "inc_race_ca": "Level break",
-           "inc_race_tx": "High level + step", "emp_race_ca": "Drift + peak",
+           "inc_race_tx": "Level break, high baseline", "emp_race_ca": "Drift + peak",
            "inc_sex_ca": "Convergence"}
 
 # ---------------------------------------------------------------- robustness (Table V, first rows)

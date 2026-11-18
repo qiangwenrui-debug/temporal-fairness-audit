@@ -44,8 +44,8 @@ def fig1():
                                     fc=fc, ec=ec, lw=0.8))
         ax.text(x + w / 2, y + h - 2.2, title, ha="center", va="top", fontsize=7.5, weight="bold",
                 color=INK)
-        ax.text(x + w / 2, y + h - 6.2, body, ha="center", va="top", fontsize=6.6, color=INK,
-                linespacing=1.25)
+        ax.text(x + w / 2, y + h - 5.1, body, ha="center", va="top", fontsize=6.0, color=INK,
+                linespacing=1.1)
 
     def arrow(x0, y0, x1, y1):
         ax.annotate("", xy=(x1, y1), xytext=(x0, y0),
@@ -54,7 +54,7 @@ def fig1():
     ax.text(1, 29.5, "Decision time (period t)", fontsize=7.5, color=BLUE, weight="bold", va="top")
     ax.text(1, 9.5, "After labels\narrive\n(period t + d)", fontsize=7.5, color=ORANGE,
             weight="bold", va="top", linespacing=1.2)
-    box(1, 15.5, 18, 11, "1. Retrain", "model $m_t$ on\nperiods $\\leq t-d$")
+    box(1, 15.5, 18, 11, "1. Retrain", "Audit: years $\\leq t-d$\nMonitor: years $<H$\n(reference $H$ held out)")
     box(23, 15.5, 18, 11, "2. Score & screen", "approve top $q$;\nthresholds $\\tau_{gt}(\\beta)$")
     box(45, 15.5, 22, 11, "3. Approval gap", "$G_t(\\beta)$ and $\\beta^*_t$\n(Algorithm 1; no labels)")
     box(71, 15.5, 28, 11, "4. Residual estimate (Sec. IV)",

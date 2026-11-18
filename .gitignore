@@ -4,13 +4,3 @@ __pycache__/
 *.pyc
 .DS_Store
 .idea/
-experiments/acs_data/
-experiments/results_*/
-experiments/monitor_*/
-experiments/ablations_*/
-experiments/census_suite/
-experiments/synthetic_*/
-experiments/robustness_*/
-manuscript/figures/
-manuscript/tables.json
-manuscript/figsizes.json

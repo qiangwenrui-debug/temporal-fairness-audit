@@ -1,7 +1,7 @@
 # Temporal Fairness Audit
 
 Code for *When Pooled Fairness Audits Fail: Period-Wise Decomposition and Delay-Aware
-Monitoring of Group Approval Gaps in Retrained Classifiers* (W. Qiang and M. Hwang, submitted to IEEE Access).
+Monitoring of Group Approval Gaps in Retrained Classifiers* (W. Qiang and M. Huang, prepared for submission to IEEE Access).
 
 ## Setup
 
@@ -60,3 +60,17 @@ across hardware (yearly gaps by up to about 0.3 percentage points), without chan
 ## License
 
 MIT
+
+## Result provenance and scope
+
+The main manuscript has a separate supplementary PDF containing Appendices A and B.
+The figure and table renderers use a mixture of stored main-run snapshots in
+`results_data.py` and collected output in `collected_tables.json`. Rerunning the
+experiments does not automatically replace all snapshots. Reconcile fresh outputs
+with the documented source files before rendering updated figures. The provided
+renderers reproduce the reported presentation; this is distinct from independent
+experimental replication. No new experiments were run for the editorial revision.
+
+Figure 1 distinguishes audit training (years <= t-d) from monitoring training
+(years < H, with H held out). AI-assisted translation and language editing of the
+manuscript are disclosed in its Acknowledgment.
