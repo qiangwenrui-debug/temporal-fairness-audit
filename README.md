@@ -1,76 +1,33 @@
-# Temporal Fairness Audit
+# Temporal fairness audit code
 
-Code for *When Pooled Fairness Audits Fail: Period-Wise Decomposition and Delay-Aware
-Monitoring of Group Approval Gaps in Retrained Classifiers* (W. Qiang and M. Huang, prepared for submission to IEEE Access).
+Code for W. Qiang and M. Huang, "When Pooled Fairness Audits Fail: Approval Gaps in Annually Retrained Classifiers" (submitted to IEEE Access). The full replication package, with data, fitted models, scores and results, is archived at https://doi.org/10.5281/zenodo.24394770.
 
-## Setup
+The replication guide (`README.md` at the top of the replication package) lists the commands for the figures, tables, four-state tests and monitoring results in the paper. Run those commands from the directory containing `code/`, `data/` and `results/`.
 
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-cd experiments
-```
+## Historical census audits and simulations
 
-ACS PUMS files are downloaded from census.gov by Folktables on the first run into
-`acs_data/` (not included in this repository).
+The commands below run from `code/experiments/` and generate the historical census and simulation results. The census tasks use American Community Survey one-year person files, downloaded through Folktables. The simulation uses generated data.
 
-## Reproducing the results
+| Analysis | Command |
+|---|---|
+| California income by race | `python run_temporal_audit.py --states CA --group race --task income --label-mode quantile` |
+| Texas, New York and Florida, pooled within each year | `python run_temporal_audit.py --states TX NY FL --group race --task income --label-mode quantile` |
+| California employment by race | `python run_temporal_audit.py --states CA --group race --task employment` |
+| California income by sex | `python run_temporal_audit.py --states CA --group sex --task income --label-mode quantile` |
+| California employment by sex | `python run_temporal_audit.py --states CA --group sex --task employment` |
+| Survey weights and occupation sensitivity | `python robustness_checks.py` |
+| Simulated distribution shifts | `python synthetic_validation.py --reps 20` |
+| Score misspecification and reference sample size | `python synthetic_ablations.py --reps 20` |
+| Label shift with group-specific features | `python synthetic_ablations.py --reps 20 --parts 2 --out synthetic_ablations_p2` |
 
-| Paper item | Command (run inside `experiments/`) | Output |
-| --- | --- | --- |
-| Smoke test (no download) | `python run_temporal_audit.py --synthetic` | `results_synthetic/` |
-| Fig. 2(b), Tables IV-V | `python run_temporal_audit.py --states CA --group race --task income --label-mode quantile` | `results_income_race_CA_d1_quantile/` |
-| Table V, nominal / real label | add `--label-mode nominal` or `--label-mode real` | |
-| Table V, two-year delay | add `--label-delay 2` | |
-| Fig. 2(c) | `python run_temporal_audit.py --states TX NY FL --group race --task income --label-mode quantile` | |
-| Fig. 2(d) | `python run_temporal_audit.py --states CA --group race --task employment` | |
-| Fig. 2(e) | `python run_temporal_audit.py --states CA --group sex --task income --label-mode quantile` | |
-| Stable control | `python run_temporal_audit.py --states CA --group sex --task employment` | |
-| Table V, weights and occupation | `python robustness_checks.py` | `robustness_income_race_CA/` |
-| Tables VI, IX (synthetic rows) | `python synthetic_validation.py --reps 20` | `synthetic_validation/` |
-| Tables VII, IX, Fig. 4 | `python delay_aware_monitor.py --states CA --group race --task income --label-mode quantile --domain-clf lr` | `monitor_*/` |
-| Table VII, d = 2 | add `--label-delay 2` | |
-| Table VII, employment | `python delay_aware_monitor.py --states CA --group race --task employment --domain-clf lr` | |
-| Table A6 (approval share q) | `pooled.csv` of the five audit runs above, renamed and copied to `manuscript/qsens/` | `manuscript/qsens/*.csv` |
-| Table III, IV (collected) | `python collect_numbers.py` | printed |
-| Tables VII, VIII, A3, A5; Table V (last rows); Fig. 4 | `python run_census_suite.py` (runs `monitor_ablations.py`, `audit_checks.py`, `robustness_checks.py`) | `census_suite/` |
-| Tables VI (E3u), A4; Section VI-F label-shift check | `python synthetic_ablations.py --reps 20` and `python synthetic_ablations.py --reps 20 --parts 2 --out synthetic_ablations_p2` | `synthetic_ablations*/` |
+For the alternative income cutoffs use `--label-mode nominal` or `--label-mode real`. For a two-year outcome delay use `--label-delay 2`. The census audit and the residual monitor use different training cutoffs. The monitor holds back the most recent labelled year as a reference cohort.
 
-All runs use fixed seeds (`--seed 0`). Runtimes on an Apple Silicon laptop: 60-400 s per command.
+## Software and data
 
-## Manuscript tables and figures
+The historical census and simulation runs used Python 3.14.0 on Apple Silicon. Package versions for these analyses are in `requirements.txt`. The four-state runs used Python 3.12.10 on Windows. Their versions and data preparation commands are in the monitoring guide (`results/monitor/README.md` in the replication package).
 
-`manuscript/results_data.py` holds the numbers of the main runs, copied from the
-outputs above (see its header); `manuscript/collect_results.py census_suite synthetic_ablations synthetic_ablations_p2`
-reads these outputs directly into `collected_tables.json` and `collected_numbers.json`. `python make_tables.py` and `python make_figures.py` build the tables and
-Figs. 1-4 (`manuscript/figures/`).
-
-## Corporate credit case (Section VII)
-
-The CSMAR data are licensed and cannot be redistributed. Appendix B and Table A7 of the paper
-document the data construction; the CSMAR processing code is available from the author on request.
-
-## Software
-
-Python 3.14.0, scikit-learn 1.8.0, XGBoost 3.2.0, LightGBM 4.7.0, Folktables 0.0.12,
-pandas 3.0.2, NumPy 2.4.4, Matplotlib 3.10.9. Logistic-regression and LightGBM results are
-identical across machines; XGBoost builds histograms in parallel and its results differ slightly
-across hardware (yearly gaps by up to about 0.3 percentage points), without changing any conclusion.
+Appendix B documents the corporate credit cohort. The replication package provides the public disclosure dates and aggregate results for that example. The underlying corporate statements are licensed by CSMAR.
 
 ## License
 
 MIT
-
-## Result provenance and scope
-
-The main manuscript has a separate supplementary PDF containing Appendices A and B.
-The figure and table renderers use a mixture of stored main-run snapshots in
-`results_data.py` and collected output in `collected_tables.json`. Rerunning the
-experiments does not automatically replace all snapshots. Reconcile fresh outputs
-with the documented source files before rendering updated figures. The provided
-renderers reproduce the reported presentation; this is distinct from independent
-experimental replication. No new experiments were run for the editorial revision.
-
-Figure 1 distinguishes audit training (years <= t-d) from monitoring training
-(years < H, with H held out). AI-assisted translation and language editing of the
-manuscript are disclosed in its Acknowledgment.
